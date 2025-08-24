@@ -1,8 +1,10 @@
-
 import tkinter as tk
 from tkinter import ttk, messagebox
 import csv
 from datetime import datetime
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from collections import defaultdict
 
 ARQUIVO_DADOS = "movimentacoes_cartao.csv"
 
@@ -28,9 +30,8 @@ class AppCartao:
                     "Aguardando comprovação", 
                     "Nota fiscal anexada",
                     "Em Análise",
-                    "Compra indevida – aguardando regularização",
                     "Compra Aprovada",
-                    "Em disputa / contestação no banco"
+                    "Aprovada e Liquidada"
                 ], state="readonly")
                 cb.grid(row=i, column=1, padx=5, pady=3, sticky="ew")
                 self.entradas[key] = cb
@@ -40,10 +41,13 @@ class AppCartao:
                 self.entradas[key] = e
 
         linha_atual = len(campos)
+
+        # Checkbox parcelada
         self.parcelada_var = tk.BooleanVar()
         self.chk_parcelada = tk.Checkbutton(root, text="Compra Parcelada?", variable=self.parcelada_var, command=self.toggle_parcelamento)
         self.chk_parcelada.grid(row=linha_atual, column=0, columnspan=2, sticky="w", padx=5, pady=3)
 
+        # Entradas de parcelas
         tk.Label(root, text="Parcela Atual").grid(row=linha_atual+1, column=0, sticky="w", padx=5)
         self.parcela_atual_entry = tk.Entry(root, state="disabled")
         self.parcela_atual_entry.grid(row=linha_atual+1, column=1, sticky="ew", padx=5)
@@ -52,9 +56,67 @@ class AppCartao:
         self.total_parcelas_entry = tk.Entry(root, state="disabled")
         self.total_parcelas_entry.grid(row=linha_atual+2, column=1, sticky="ew", padx=5)
 
+        # Botões principais
         tk.Button(root, text="Salvar Movimentação", command=self.salvar).grid(row=linha_atual+3, column=0, columnspan=2, pady=10)
         tk.Button(root, text="Visualizar Registros", command=self.visualizar).grid(row=linha_atual+4, column=0, columnspan=2)
-        root.grid_columnconfigure(1, weight=1)
+
+        # AQUI É O LUGAR CERTO para adicionar o botão de gráficos
+        tk.Button(root, text="Mostrar Gráficos", command=self.mostrar_grafico).grid(row=linha_atual+5, column=0, columnspan=2, pady=10)
+
+
+    def mostrar_grafico(self):
+        try:
+            with open(ARQUIVO_DADOS, newline='', encoding="utf-8") as f:
+                reader = csv.reader(f)
+                dados = list(reader)
+        except FileNotFoundError:
+            messagebox.showerror("Erro", "Nenhuma movimentação registrada ainda.")
+            return
+
+        if not dados:
+            messagebox.showinfo("Info", "Nenhum registro para gerar gráfico.")
+            return
+
+        # Agrupar valores por responsável
+        total_por_responsavel = defaultdict(float)
+        total_por_cartao = defaultdict(float)
+        for linha in dados:
+            if len(linha) != 6:
+                continue
+            valor = 0.0
+            try:
+                valor = float(linha[3].replace(",", "."))
+            except ValueError:
+                continue
+            situacao = linha[5]
+            if situacao == "Aprovada e Liquidada":
+                continue  # Ignorar no gráfico de total
+            total_por_responsavel[linha[4]] += valor
+            total_por_cartao[linha[0]] += valor
+
+        # Criar janela do gráfico
+        graf_win = tk.Toplevel(self.root)
+        graf_win.title("Gráficos de Gastos")
+
+        fig, axs = plt.subplots(1, 2, figsize=(10,4))
+
+        # Gráfico por responsável
+        axs[0].bar(total_por_responsavel.keys(), total_por_responsavel.values(), color='skyblue')
+        axs[0].set_title("Gastos por Responsável")
+        axs[0].set_ylabel("R$")
+        axs[0].tick_params(axis='x', rotation=45)
+
+        # Gráfico por cartão
+        axs[1].bar(total_por_cartao.keys(), total_por_cartao.values(), color='lightgreen')
+        axs[1].set_title("Gastos por Cartão")
+        axs[1].set_ylabel("R$")
+        axs[1].tick_params(axis='x', rotation=45)
+
+        fig.tight_layout()
+
+        canvas = FigureCanvasTkAgg(fig, master=graf_win)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True)
 
     def toggle_parcelamento(self):
         estado = "normal" if self.parcelada_var.get() else "disabled"
@@ -128,21 +190,45 @@ class AppCartao:
         filtro_data = tk.Entry(filtro_frame)
         filtro_data.grid(row=0, column=5, padx=5)
 
+        tk.Label(filtro_frame, text="Situação:").grid(row=0, column=6)
+        filtro_situacao = ttk.Combobox(filtro_frame, values=[
+            "", "Aguardando comprovação", "Nota fiscal anexada", 
+            "Em Análise", "Compra Aprovada", "Aprovada e Liquidada"
+        ], state="readonly")
+        filtro_situacao.grid(row=0, column=7, padx=5)
+        filtro_situacao.set("")
+
         colunas = ["Cartão", "Data", "Descrição", "Valor", "Responsável", "Situação"]
         tree = ttk.Treeview(janela, columns=colunas, show="headings")
         for nome in colunas:
             tree.heading(nome, text=nome)
             tree.column(nome, width=130, anchor="center")
 
+        total_label = tk.Label(janela, text="Total: R$ 0,00", font=("Arial", 10, "bold"))
+        total_label.pack(pady=5)
+
         def carregar_dados(filtrar=False):
             tree.delete(*tree.get_children())
+            total = 0.0
             for linha in dados:
-                if len(linha) == 6:
-                    if filtrar:
-                        if (filtro_resp.get() and filtro_resp.get().lower() not in linha[4].lower()) or                            (filtro_cartao.get() and filtro_cartao.get().lower() not in linha[0].lower()) or                            (filtro_data.get() and filtro_data.get() not in linha[1]):
-                            continue
-                    valor_formatado = f"R${linha[3]}"
-                    tree.insert("", "end", values=(linha[0], linha[1], linha[2], valor_formatado, linha[4], linha[5]))
+                if len(linha) != 6:
+                    continue
+                if filtrar:
+                    if (filtro_resp.get() and filtro_resp.get().lower() not in linha[4].lower()) or \
+                       (filtro_cartao.get() and filtro_cartao.get().lower() not in linha[0].lower()) or \
+                       (filtro_data.get() and filtro_data.get() not in linha[1]) or \
+                       (filtro_situacao.get() and filtro_situacao.get() != linha[5]):
+                        continue
+                # Somar apenas se não for "Aprovada e Liquidada" ou se o filtro estiver selecionado
+                if linha[5] != "Aprovada e Liquidada" or filtro_situacao.get() == "Aprovada e Liquidada":
+                    try:
+                        total += float(linha[3].replace(",", "."))
+                    except ValueError:
+                        pass
+                valor_formatado = f"R${linha[3]}"
+                tree.insert("", "end", values=(linha[0], linha[1], linha[2], valor_formatado, linha[4], linha[5]))
+            
+            total_label.config(text=f"Total: R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
         carregar_dados()
         tree.pack(fill="both", expand=True, padx=5, pady=5)
@@ -168,9 +254,8 @@ class AppCartao:
                     "Aguardando comprovação", 
                     "Nota fiscal anexada",
                     "Em Análise",
-                    "Compra indevida – aguardando regularização",
                     "Compra Aprovada",
-                    "Em disputa / contestação no banco"
+                    "Aprovada e Liquidada"
                 ]) if campo == "Situação" else tk.Entry(edit_win)
                 entrada.grid(row=i, column=1, padx=5, pady=3, sticky="ew")
                 entrada.insert(0, valores[i].replace("R$", "") if campo == "Valor" else valores[i])
@@ -189,6 +274,8 @@ class AppCartao:
             tk.Button(edit_win, text="Salvar Alterações", command=salvar_edicao).grid(row=6, columnspan=2, pady=10)
 
         tk.Button(janela, text="Editar Registro", command=editar_registro).pack(pady=5)
+
+        tk.Button(root, text="Mostrar Gráficos", command=self.mostrar_grafico).grid(row=linha_atual+5, column=0, columnspan=2, pady=10)
 
 if __name__ == "__main__":
     root = tk.Tk()
