@@ -271,7 +271,20 @@ class AppCartao:
                 janela.destroy()
                 self.visualizar()
 
-            tk.Button(edit_win, text="Salvar Alterações", command=salvar_edicao).grid(row=6, columnspan=2, pady=10)
+            def excluir_registro():
+                confirmar = messagebox.askyesno("Confirmação", "Tem certeza que deseja excluir este registro?")
+                if confirmar:
+                    dados.pop(indice)
+                    with open(ARQUIVO_DADOS, "w", newline='', encoding="utf-8") as f:
+                        writer = csv.writer(f)
+                        writer.writerows(dados)
+                    edit_win.destroy()
+                    janela.destroy()
+                    self.visualizar()
+
+            tk.Button(edit_win, text="Salvar Alterações", command=salvar_edicao).grid(row=6, column=0, pady=10, padx=5, sticky="ew")
+            tk.Button(edit_win, text="Excluir Registro", command=excluir_registro).grid(row=6, column=1, pady=10, padx=5, sticky="ew")
+
 
         tk.Button(janela, text="Editar Registro", command=editar_registro).pack(pady=5)
 
