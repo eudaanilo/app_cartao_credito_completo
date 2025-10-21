@@ -240,31 +240,31 @@ class AppCartao:
         janela = tk.Toplevel(self.root)
         janela.title("Movimentações Registradas")
 
-        # Painel informativo no topo
+        # ====== PAINEL INFORMATIVO NO TOPO ======
         if ultima_linha:
             info_frame = tk.Frame(janela, bg="#f0f0f0")
             info_frame.pack(fill="x", padx=5, pady=5)
 
-            tk.Label(
-                info_frame,
-                text=f"Última movimentação: {ultima_linha[1]}",
-                bg="#f0f0f0",
-                font=("Arial", 10, "bold")
-            ).pack(side="left", padx=10)
+            data_txt = ultima_linha[1]
+            cartao_txt = ultima_linha[0]
+            descricao_txt = ultima_linha[2]
+            valor_txt = ultima_linha[3]
+
+            info_texto = (
+                f" Última movimentação: {data_txt}   |   "
+                f" Cartão: {cartao_txt}   |   "
+                f" Descrição: {descricao_txt}   |   "
+                f" Valor: R$ {valor_txt}"
+            )
 
             tk.Label(
                 info_frame,
-                text=f"Cartão: {ultima_linha[0]}",
+                text=info_texto,
                 bg="#f0f0f0",
-                font=("Arial", 10, "bold")
-            ).pack(side="left", padx=20)
-
-            tk.Label(
-                info_frame,
-                text=f"Descrição: {ultima_linha[2]}",
-                bg="#f0f0f0",
-                font=("Arial", 10, "bold")
-            ).pack(side="left", padx=20)
+                font=("Arial", 10, "bold"),
+                wraplength=900,
+                justify="left"
+            ).pack(anchor="w", padx=10, pady=5)
 
         # ====== RESTANTE DO CÓDIGO ORIGINAL ======
         filtro_frame = tk.Frame(janela)
@@ -291,7 +291,9 @@ class AppCartao:
         filtro_situacao.set("")
 
         exibir_parceladas_var = tk.BooleanVar(value=False)
-        chk_exibir_parceladas = tk.Checkbutton(filtro_frame, text="Exibir apenas parceladas", variable=exibir_parceladas_var)
+        chk_exibir_parceladas = tk.Checkbutton(
+            filtro_frame, text="Exibir apenas parceladas", variable=exibir_parceladas_var
+        )
         chk_exibir_parceladas.grid(row=0, column=8, padx=5)
 
         colunas = ["Cartão", "Data", "Descrição", "Valor", "Responsável", "Situação", "Parcela"]
@@ -327,8 +329,12 @@ class AppCartao:
                 if a is not None and t is not None:
                     parcela_str = f"{a}/{t}"
                 valor_formatado = f"R${linha[3]}"
-                tree.insert("", "end", values=(linha[0], linha[1], linha[2], valor_formatado, linha[4], linha[5], parcela_str))
-            total_label.config(text=f"Total: R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                tree.insert("", "end", values=(
+                    linha[0], linha[1], linha[2], valor_formatado, linha[4], linha[5], parcela_str
+                ))
+            total_label.config(
+                text=f"Total: R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            )
 
         carregar_dados()
         tree.pack(fill="both", expand=True, padx=5, pady=5)
