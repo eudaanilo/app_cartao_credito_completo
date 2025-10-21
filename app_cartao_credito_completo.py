@@ -220,9 +220,53 @@ class AppCartao:
             messagebox.showerror("Erro", "Nenhuma movimentação registrada ainda.")
             return
 
+        if not dados:
+            messagebox.showinfo("Info", "Nenhuma movimentação registrada ainda.")
+            return
+
+        # ====== NOVO BLOCO: identificar última movimentação ======
+        ultima_data = None
+        ultima_linha = None
+        for linha in dados:
+            if len(linha) >= 2:
+                try:
+                    data = datetime.strptime(linha[1], "%d/%m/%Y")
+                    if not ultima_data or data > ultima_data:
+                        ultima_data = data
+                        ultima_linha = linha
+                except ValueError:
+                    continue
+
         janela = tk.Toplevel(self.root)
         janela.title("Movimentações Registradas")
 
+        # Painel informativo no topo
+        if ultima_linha:
+            info_frame = tk.Frame(janela, bg="#f0f0f0")
+            info_frame.pack(fill="x", padx=5, pady=5)
+
+            tk.Label(
+                info_frame,
+                text=f"Última movimentação: {ultima_linha[1]}",
+                bg="#f0f0f0",
+                font=("Arial", 10, "bold")
+            ).pack(side="left", padx=10)
+
+            tk.Label(
+                info_frame,
+                text=f"Cartão: {ultima_linha[0]}",
+                bg="#f0f0f0",
+                font=("Arial", 10, "bold")
+            ).pack(side="left", padx=20)
+
+            tk.Label(
+                info_frame,
+                text=f"Descrição: {ultima_linha[2]}",
+                bg="#f0f0f0",
+                font=("Arial", 10, "bold")
+            ).pack(side="left", padx=20)
+
+        # ====== RESTANTE DO CÓDIGO ORIGINAL ======
         filtro_frame = tk.Frame(janela)
         filtro_frame.pack(fill="x", padx=5, pady=5)
 
@@ -271,30 +315,23 @@ class AppCartao:
                        (filtro_data.get() and filtro_data.get() not in linha[1]) or \
                        (filtro_situacao.get() and filtro_situacao.get() != linha[5]):
                         continue
-                # filtrar por parceladas se checkbox ativo
                 if exibir_parceladas_var.get() and not self.eh_parcelada(linha):
                     continue
-
-                # Somar apenas se não for "Aprovada e Liquidada" ou se o filtro estiver selecionado
                 if linha[5] != "Aprovada e Liquidada" or filtro_situacao.get() == "Aprovada e Liquidada":
                     try:
                         total += float(linha[3].replace(",", "."))
                     except ValueError:
                         pass
-
                 parcela_str = ""
                 a, t = self.extrair_parcela_de_linha(linha)
                 if a is not None and t is not None:
                     parcela_str = f"{a}/{t}"
-
                 valor_formatado = f"R${linha[3]}"
                 tree.insert("", "end", values=(linha[0], linha[1], linha[2], valor_formatado, linha[4], linha[5], parcela_str))
-
             total_label.config(text=f"Total: R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
         carregar_dados()
         tree.pack(fill="both", expand=True, padx=5, pady=5)
-
         tk.Button(janela, text="Filtrar", command=lambda: carregar_dados(True)).pack(pady=5)
 
         # ----------------- botões gerais solicitados -----------------
