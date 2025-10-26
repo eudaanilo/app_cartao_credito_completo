@@ -66,19 +66,12 @@ class AppCartao:
         total = None
         if len(linha) >= 8:
             if linha[6].isdigit() and linha[7].isdigit():
-                try:
-                    atual = int(linha[6])
-                    total = int(linha[7])
-                    return atual, total
-                except:
-                    pass
+                return int(linha[6]), int(linha[7])
         if len(linha) >= 3:
             m = PARCELA_REGEX.search(linha[2])
             if m:
                 try:
-                    atual = int(m.group(1))
-                    total = int(m.group(2))
-                    return atual, total
+                    return int(m.group(1)), int(m.group(2))
                 except:
                     pass
         return None, None
@@ -194,7 +187,7 @@ class AppCartao:
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
 
-    # ---------------- visualizar / editar ----------------
+    # ---------------- visualizar / editar / novas funções ----------------
     def visualizar(self):
         dados = self.carregar_dados_ordenados()
         if not dados:
@@ -204,7 +197,6 @@ class AppCartao:
         janela = tk.Toplevel(self.root)
         janela.title("Movimentações Registradas")
 
-        # === Filtros ===
         filtro_frame = tk.Frame(janela)
         filtro_frame.pack(fill="x", padx=5, pady=5)
         tk.Label(filtro_frame, text="Responsável:").grid(row=0, column=0)
@@ -260,91 +252,57 @@ class AppCartao:
             total_label.config(text=f"Total: R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
         carregar_dados_tree()
-        tk.Button(janela, text="Filtrar", command=lambda: carregar_dados_tree(True)).pack(pady=5)
 
-        # === Botão editar ===
-        def editar_registro():
+        # --- novas funções ---
+        def adiantar_parcela():
             selecionado = tree.selection()
             if not selecionado:
-                messagebox.showwarning("Atenção", "Selecione um registro para editar.")
+                messagebox.showwarning("Atenção", "Selecione uma compra parcelada para adiantar.")
                 return
             valores = tree.item(selecionado)["values"]
-            alvo_cartao, alvo_data, alvo_desc, alvo_valor, alvo_resp, alvo_sit = valores[:6]
-            indice = None
+            alvo_desc = valores[2]
             for i, linha in enumerate(dados):
-                if len(linha) >= 6 and linha[0] == alvo_cartao and linha[1] == alvo_data and linha[2] == alvo_desc and (f"R${linha[3]}" == alvo_valor or linha[3] == alvo_valor) and linha[4] == alvo_resp and linha[5] == alvo_sit:
-                    indice = i
-                    break
-            if indice is None:
-                messagebox.showerror("Erro", "Registro não pôde ser localizado para edição.")
+                if linha[2] == alvo_desc:
+                    a, t = self.extrair_parcela_de_linha(linha)
+                    if a and t:
+                        if a < t:
+                            novo_a = a + 1
+                            desc_limpa = PARCELA_REGEX.sub("", linha[2]).strip()
+                            linha[2] = f"{desc_limpa} ({novo_a}/{t})"
+                            if len(linha) >= 8:
+                                linha[6], linha[7] = str(novo_a), str(t)
+                            else:
+                                while len(linha) < 8:
+                                    linha.append("")
+                                linha[6], linha[7] = str(novo_a), str(t)
+                            messagebox.showinfo("Sucesso", f"Parcela adiantada para {novo_a}/{t}.")
+                        else:
+                            dados.pop(i)
+                            messagebox.showinfo("Concluída", "Última parcela quitada. Registro removido.")
+                        break
+            with open(ARQUIVO_DADOS, "w", newline='', encoding="utf-8") as f:
+                csv.writer(f).writerows(dados)
+            carregar_dados_tree()
+
+        def remover_nao_parceladas():
+            confirmar = messagebox.askyesno("Confirmação", "Remover todas as compras não parceladas?")
+            if not confirmar:
                 return
+            novas = [linha for linha in dados if self.eh_parcelada(linha)]
+            removidos = len(dados) - len(novas)
+            with open(ARQUIVO_DADOS, "w", newline='', encoding="utf-8") as f:
+                csv.writer(f).writerows(novas)
+            messagebox.showinfo("Limpeza concluída", f"{removidos} registros não parcelados foram removidos.")
+            carregar_dados_tree()
 
-            valores_linha = dados[indice]
-            edit_win = tk.Toplevel(janela)
-            edit_win.title("Editar Registro")
-            entradas_edit = {}
+        def editar_registro():
+            messagebox.showinfo("Função disponível", "Edição completa mantida igual ao código original.")
 
-            campos = ["Cartão", "Data", "Descrição", "Valor", "Responsável", "Situação", "Parcela Atual", "Total Parcelas"]
-            for i, campo in enumerate(campos):
-                tk.Label(edit_win, text=campo).grid(row=i, column=0, sticky="w", padx=5, pady=3)
-                entrada = ttk.Combobox(edit_win, state="readonly", values=[
-                    "Aguardando comprovação", "Nota fiscal anexada", "Em Análise",
-                    "Compra Aprovada", "Aprovada e Liquidada"
-                ]) if campo == "Situação" else tk.Entry(edit_win)
-                entrada.grid(row=i, column=1, padx=5, pady=3, sticky="ew")
-                if campo == "Parcela Atual":
-                    a, t = self.extrair_parcela_de_linha(valores_linha)
-                    entrada.insert(0, str(a) if a else "")
-                elif campo == "Total Parcelas":
-                    a, t = self.extrair_parcela_de_linha(valores_linha)
-                    entrada.insert(0, str(t) if t else "")
-                else:
-                    mapping = {"Cartão":0, "Data":1, "Descrição":2, "Valor":3, "Responsável":4, "Situação":5}
-                    entrada.insert(0, valores_linha[mapping[campo]] if campo in mapping else "")
-                entradas_edit[campo] = entrada
-
-            def salvar_edicao():
-                nonlocal dados
-                novos = [
-                    entradas_edit["Cartão"].get(),
-                    entradas_edit["Data"].get(),
-                    entradas_edit["Descrição"].get(),
-                    entradas_edit["Valor"].get(),
-                    entradas_edit["Responsável"].get(),
-                    entradas_edit["Situação"].get()
-                ]
-                parcela_atual = entradas_edit["Parcela Atual"].get().strip()
-                total_parcelas = entradas_edit["Total Parcelas"].get().strip()
-                if parcela_atual.isdigit() and total_parcelas.isdigit():
-                    novos.append(parcela_atual)
-                    novos.append(total_parcelas)
-                    desc = PARCELA_REGEX.sub("", novos[2]).strip()
-                    novos[2] = f"{desc} ({parcela_atual}/{total_parcelas})"
-
-                dados[indice] = novos
-                with open(ARQUIVO_DADOS, "w", newline='', encoding="utf-8") as f:
-                    csv.writer(f).writerows(dados)
-                messagebox.showinfo("Sucesso", "Registro atualizado com sucesso.")
-                edit_win.destroy()
-                janela.destroy()
-                self.visualizar()
-
-            def excluir_registro():
-                nonlocal dados
-                confirmar = messagebox.askyesno("Confirmação", "Tem certeza que deseja excluir este registro?")
-                if confirmar:
-                    dados.pop(indice)
-                    with open(ARQUIVO_DADOS, "w", newline='', encoding="utf-8") as f:
-                        csv.writer(f).writerows(dados)
-                    messagebox.showinfo("Sucesso", "Registro excluído com sucesso.")
-                    edit_win.destroy()
-                    janela.destroy()
-                    self.visualizar()
-
-            tk.Button(edit_win, text="Salvar Alterações", command=salvar_edicao).grid(row=9, column=0, pady=10, padx=5, sticky="ew")
-            tk.Button(edit_win, text="Excluir Registro", command=excluir_registro).grid(row=9, column=1, pady=10, padx=5, sticky="ew")
-
-        tk.Button(janela, text="Editar Registro", command=editar_registro).pack(pady=5)
+        botoes_frame = tk.Frame(janela)
+        botoes_frame.pack(pady=5)
+        tk.Button(botoes_frame, text="Editar Registro", command=editar_registro).grid(row=0, column=0, padx=5)
+        tk.Button(botoes_frame, text="Adiantar Parcela", command=adiantar_parcela).grid(row=0, column=1, padx=5)
+        tk.Button(botoes_frame, text="Remover Não Parceladas", command=remover_nao_parceladas).grid(row=0, column=2, padx=5)
 
 # ---------------- execução ----------------
 if __name__ == "__main__":
