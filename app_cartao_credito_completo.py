@@ -197,6 +197,7 @@ class AppCartao:
         janela = tk.Toplevel(self.root)
         janela.title("Movimentações Registradas")
 
+        # === Filtros ===
         filtro_frame = tk.Frame(janela)
         filtro_frame.pack(fill="x", padx=5, pady=5)
         tk.Label(filtro_frame, text="Responsável:").grid(row=0, column=0)
@@ -218,6 +219,9 @@ class AppCartao:
         exibir_parceladas_var = tk.BooleanVar(value=False)
         tk.Checkbutton(filtro_frame, text="Exibir apenas parceladas", variable=exibir_parceladas_var).grid(row=0, column=8, padx=5)
 
+        # === Botão de Filtrar (acima da tabela) ===
+        tk.Button(janela, text="Filtrar", command=lambda: carregar_dados_tree(True)).pack(pady=(0, 5))
+
         colunas = ["Cartão", "Data", "Descrição", "Valor", "Responsável", "Situação", "Parcela"]
         tree = ttk.Treeview(janela, columns=colunas, show="headings")
         for nome in colunas:
@@ -236,9 +240,9 @@ class AppCartao:
                     continue
                 if filtrar:
                     if (filtro_resp.get() and filtro_resp.get().lower() not in linha[4].lower()) or \
-                       (filtro_cartao.get() and filtro_cartao.get().lower() not in linha[0].lower()) or \
-                       (filtro_data.get() and filtro_data.get() not in linha[1]) or \
-                       (filtro_situacao.get() and filtro_situacao.get() != linha[5]):
+                    (filtro_cartao.get() and filtro_cartao.get().lower() not in linha[0].lower()) or \
+                    (filtro_data.get() and filtro_data.get() not in linha[1]) or \
+                    (filtro_situacao.get() and filtro_situacao.get() != linha[5]):
                         continue
                 if exibir_parceladas_var.get() and not self.eh_parcelada(linha):
                     continue
